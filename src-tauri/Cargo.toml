@@ -7,6 +7,8 @@ license = "MIT"
 repository = "https://github.com/farion1231/cc-switch"
 edition = "2021"
 rust-version = "1.85.0"
+# 桌面版是主程序；cc-switch-server 需要 --features web-server 才会构建
+default-run = "cc-switch"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,6 +22,17 @@ doctest = false
 [features]
 default = []
 test-hooks = []
+# 无界面的用量统计服务（Docker / 服务器），见 src/web_server
+web-server = ["tokio/signal"]
+
+[[bin]]
+name = "cc-switch"
+path = "src/main.rs"
+
+[[bin]]
+name = "cc-switch-server"
+path = "src/bin/cc-switch-server.rs"
+required-features = ["web-server"]
 
 [build-dependencies]
 tauri-build = { version = "2.4.0", features = [] }

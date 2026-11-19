@@ -182,7 +182,7 @@ pub async fn get_model_pricing(
     run_db_query(&state, get_model_pricing_blocking).await
 }
 
-fn get_model_pricing_blocking(
+pub(crate) fn get_model_pricing_blocking(
     db: &crate::database::Database,
 ) -> Result<Vec<ModelPricingInfo>, AppError> {
     log::info!("获取模型定价列表");

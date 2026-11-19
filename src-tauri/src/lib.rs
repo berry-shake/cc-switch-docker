@@ -62,6 +62,8 @@ mod tray_compat;
 mod tray_panel;
 mod usage_events;
 mod usage_script;
+#[cfg(feature = "web-server")]
+mod web_server;
 mod window_fit;
 mod workbuddy_config;
 
@@ -102,6 +104,8 @@ pub use settings::{update_settings, AppSettings};
 pub use store::AppState;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+#[cfg(feature = "web-server")]
+pub use web_server::run as run_web_server;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fmt, sync::Arc};
