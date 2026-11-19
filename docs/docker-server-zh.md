@@ -27,7 +27,7 @@ docker compose up -d
 - 会话签名密钥保存在数据目录的 `web-session.key`（0600），重启服务不用重新登录；**改密码后所有已登录会话立即失效**。删掉该文件也会让所有会话失效。
 - 同一 IP 15 分钟内失败 10 次后暂时拒绝登录（HTTP 429）。
 - 经 HTTPS 反向代理访问时，代理需传 `X-Forwarded-Proto: https`，Cookie 才会带 `Secure`。
-- 脚本仍可直接用 HTTP Basic 访问 `/api/*`（`curl -u 用户名:密码`），见下文 HTTP API。
+- 脚本仍可直接用 HTTP Basic 访问 `/api/*`（`curl -u 用户名:密码`），见下文 HTTP API。浏览器里的请求只认登录 Cookie（旧版浏览器缓存的 Basic 凭据不再生效）。
 
 默认挂载宿主机的 `~/.claude` 和 `~/.codex`（只读）。用到其他 CLI 时，在 `docker-compose.yml` 里取消对应行的注释；只保留宿主机上确实存在的目录，不存在的路径会被 Docker 自动建成空目录（属主 root）。
 

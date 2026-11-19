@@ -4,6 +4,8 @@
 //!   之后同源的 fetch / EventSource 自动带上。服务端不存会话状态。
 //! - 脚本：`/api/*` 仍接受 `Authorization: Basic`（`curl -u`），但 401 不再带
 //!   `WWW-Authenticate`，浏览器不会弹原生登录框。
+//! - 浏览器发来的请求（带 `Sec-Fetch-Mode`）只认 Cookie：用过旧版 Basic 认证的浏览器
+//!   会一直自动附带缓存的凭据，如果也认，「退出登录」就退不掉。
 //!
 //! 签名密钥 = HMAC(数据目录里持久化的随机密钥, 用户名 + 密码)：重启服务会话仍有效，
 //! 改密码后旧会话全部失效。
@@ -170,6 +172,9 @@ impl AuthState {
         if session_cookie(headers).is_some_and(|token| self.verify_token(token)) {
             return true;
         }
+        if is_browser_request(headers) {
+            return false;
+        }
         headers
             .get(header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
@@ -266,6 +271,12 @@ fn session_cookie(headers: &HeaderMap) -> Option<&str> {
             let (name, value) = pair.trim().split_once('=')?;
             (name == COOKIE_NAME).then_some(value)
         })
+}
+
+/// 浏览器发起的 fetch / EventSource / 页面导航都带 `Sec-Fetch-Mode`（脚本改不了，
+/// curl 等不带），据此区分浏览器和脚本。
+fn is_browser_request(headers: &HeaderMap) -> bool {
+    headers.contains_key("sec-fetch-mode")
 }
 
 /// 经 HTTPS 反向代理访问时给 Cookie 加 Secure。
@@ -456,6 +467,31 @@ mod tests {
         assert!(auth.locked_for(ip).is_some());
         auth.clear_failures(ip);
         assert!(auth.locked_for(ip).is_none());
+    }
+
+    #[test]
+    fn browser_requests_ignore_basic_credentials() {
+        let auth = state();
+        let basic = format!(
+            "Basic {}",
+            base64::engine::general_purpose::STANDARD.encode("admin:s3cret")
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&basic).unwrap(),
+        );
+        assert!(auth.is_authorized(&headers), "scripts may use Basic");
+
+        headers.insert("sec-fetch-mode", HeaderValue::from_static("cors"));
+        assert!(
+            !auth.is_authorized(&headers),
+            "browser-cached Basic must not keep a logged-out browser signed in"
+        );
+
+        let cookie = format!("{COOKIE_NAME}={}", auth.issue_token(false));
+        headers.insert(header::COOKIE, HeaderValue::from_str(&cookie).unwrap());
+        assert!(auth.is_authorized(&headers));
     }
 
     #[test]
