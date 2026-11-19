@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChartColumn,
+  History,
   LayoutGrid,
   Loader2,
   LogOut,
@@ -28,6 +29,7 @@ import { LoginPage } from "./LoginPage";
 import { webText } from "./strings";
 import { closeEventSource } from "./tauri-shim/event";
 import { WebAppsPage } from "./WebAppsPage";
+import { WebSessionsPage } from "./WebSessionsPage";
 import { WebUsageApp } from "./WebUsageApp";
 
 type RootState =
@@ -36,15 +38,17 @@ type RootState =
   | { status: "login"; session: WebSession; notice: string | null }
   | { status: "ready"; session: WebSession };
 
-type WebPage = "usage" | "apps";
+type WebPage = "usage" | "sessions" | "apps";
 
 const PAGES: { id: WebPage; icon: LucideIcon; labelKey: string }[] = [
   { id: "usage", icon: ChartColumn, labelKey: "nav.usage" },
+  { id: "sessions", icon: History, labelKey: "nav.sessions" },
   { id: "apps", icon: LayoutGrid, labelKey: "nav.apps" },
 ];
 
 function pageFromHash(): WebPage {
-  return window.location.hash === "#/apps" ? "apps" : "usage";
+  const id = window.location.hash.replace(/^#\//, "");
+  return PAGES.find((page) => page.id === id)?.id ?? "usage";
 }
 
 /** 当前页记在地址的 # 里：刷新后停在原页，浏览器前进后退也能切换。 */
@@ -181,7 +185,13 @@ export function WebRoot() {
             onLogout={handleLogout}
           />
           <div className="flex min-h-0 flex-1 flex-col">
-            {page === "apps" ? <WebAppsPage /> : <WebUsageApp />}
+            {page === "apps" ? (
+              <WebAppsPage />
+            ) : page === "sessions" ? (
+              <WebSessionsPage />
+            ) : (
+              <WebUsageApp />
+            )}
           </div>
         </div>
       );

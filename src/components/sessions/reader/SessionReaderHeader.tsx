@@ -36,6 +36,7 @@ import { fieldClass } from "@/components/ui/input";
 import { useSessionUsageSummary } from "@/lib/query/usage";
 import { DRAG_REGION_ATTR } from "@/lib/platform";
 import { cn } from "@/lib/utils";
+import { IS_WEB_BUILD } from "@/lib/webBuild";
 import type { SessionMeta, TurnIndex } from "@/types";
 import {
   fmtInt,
@@ -340,18 +341,21 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
         <DropdownMenuItem className={sessionMenuItemClass} onSelect={onReload}>
           {t("sessionManager.reload", { defaultValue: "重新读取" })}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className={cn(
-            sessionMenuItemClass,
-            deletable ? "text-danger-text" : "text-fg-3",
-          )}
-          disabled={!deletable}
-          onSelect={onDelete}
-        >
-          {t("sessionManager.deleteEllipsis", { defaultValue: "删除…" })}
-        </DropdownMenuItem>
-        {!deletable &&
+        {!IS_WEB_BUILD && <DropdownMenuSeparator />}
+        {!IS_WEB_BUILD && (
+          <DropdownMenuItem
+            className={cn(
+              sessionMenuItemClass,
+              deletable ? "text-danger-text" : "text-fg-3",
+            )}
+            disabled={!deletable}
+            onSelect={onDelete}
+          >
+            {t("sessionManager.deleteEllipsis", { defaultValue: "删除…" })}
+          </DropdownMenuItem>
+        )}
+        {!IS_WEB_BUILD &&
+          !deletable &&
           ["mcode", "dsh", "copilot", "workbuddy"].includes(
             session.providerId,
           ) && (

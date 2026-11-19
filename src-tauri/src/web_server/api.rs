@@ -2,7 +2,8 @@
 //!
 //! 参数和返回值与桌面版命令保持一致（参数名 camelCase，同 Tauri invoke 的约定），
 //! Web 面板的 `@tauri-apps/api/core` shim 原样转发 invoke 即可。
-//! 只开放用量页用到的命令；其余命令返回 404。
+//! 只开放用量页、应用页、会话浏览用到的命令；其余命令返回 404。
+//! 会话相关的命令在 [`super::sessions`]。
 
 use std::convert::Infallible;
 use std::str::FromStr;
@@ -27,7 +28,7 @@ use crate::error::AppError;
 use crate::services::model_pricing::{ModelPricingInfo, ModelsDevSyncConfig};
 use crate::services::usage_stats::LogFilters;
 
-enum InvokeError {
+pub(super) enum InvokeError {
     UnknownCommand(String),
     BadArgs(String),
     Failed(String),
@@ -52,7 +53,7 @@ impl IntoResponse for InvokeError {
     }
 }
 
-type InvokeResult = Result<Value, InvokeError>;
+pub(super) type InvokeResult = Result<Value, InvokeError>;
 
 pub(super) async fn health() -> Json<Value> {
     Json(json!({ "ok": true, "version": env!("CARGO_PKG_VERSION") }))
@@ -74,6 +75,12 @@ pub(super) async fn invoke(
             }
         }
     };
+    // 这两个不是 JSON 返回值：分块流（NDJSON）和图片原始字节
+    match cmd.as_str() {
+        "stream_session_messages" => return super::sessions::stream_messages(args).await,
+        "get_session_image" => return super::sessions::image(args).await,
+        _ => {}
+    }
     match dispatch(&ctx, &cmd, args).await {
         Ok(value) => Json(value).into_response(),
         Err(error) => {
@@ -85,7 +92,7 @@ pub(super) async fn invoke(
     }
 }
 
-/// SSE：把后端事件以 `{"event": name, "payload": null}` 的形式推给前端。
+/// SSE：把后端事件以 `{"event": name, "payload": ...}` 的形式推给前端。
 pub(super) async fn events(
     State(ctx): State<Arc<ServerContext>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
@@ -98,26 +105,27 @@ pub(super) async fn events(
                 received = receiver.recv() => received,
                 _ = shutdown.wait_for(|stopping| *stopping) => break,
             };
-            let name = match received {
-                Ok(name) => name,
-                // 落后太多被跳过的消息只是刷新通知，合并成一次即可
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                    super::EVENT_USAGE_LOG_RECORDED
-                }
+            let event = match received {
+                Ok(event) => event,
+                // 落后太多被跳过的多是刷新通知 / 索引进度，补一次用量刷新即可，进度后面还会再推
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => super::ServerEvent {
+                    name: super::EVENT_USAGE_LOG_RECORDED,
+                    payload: Value::Null,
+                },
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             };
-            let data = json!({ "event": name, "payload": null }).to_string();
+            let data = json!({ "event": event.name, "payload": event.payload }).to_string();
             yield Ok(Event::default().data(data));
         }
     };
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
-fn parse<T: DeserializeOwned>(args: Value) -> Result<T, InvokeError> {
+pub(super) fn parse<T: DeserializeOwned>(args: Value) -> Result<T, InvokeError> {
     serde_json::from_value(args).map_err(|error| InvokeError::BadArgs(format!("参数错误: {error}")))
 }
 
-fn to_value<T: Serialize>(value: T) -> InvokeResult {
+pub(super) fn to_value<T: Serialize>(value: T) -> InvokeResult {
     serde_json::to_value(value).map_err(|error| InvokeError::Failed(error.to_string()))
 }
 
@@ -427,7 +435,7 @@ async fn dispatch(ctx: &ServerContext, cmd: &str, args: Value) -> InvokeResult {
                 .map_err(InvokeError::Failed)?,
         ),
 
-        // ── 设置（只读全部；只允许写用量页和应用页自己的几项）────────────────
+        // ── 设置（只读全部；只允许写 Web 各页自己的几项）────────────────
         "get_settings" => to_value(crate::settings::get_settings_for_frontend()),
         "save_settings" => {
             let a: SaveSettingsArgs = parse(args)?;
@@ -438,11 +446,16 @@ async fn dispatch(ctx: &ServerContext, cmd: &str, args: Value) -> InvokeResult {
             next.session_auto_sync_enabled = a.settings.session_auto_sync_enabled;
             // 「应用」页：用量页筛选栏显示哪些 CLI
             next.visible_apps = a.settings.visible_apps;
+            // 会话页「搜索消息正文」
+            next.session_content_search_enabled = a.settings.session_content_search_enabled;
             crate::settings::update_settings(next)?;
             Ok(Value::Bool(true))
         }
         // 用量页「数据来源」只读显示「记录请求用量」开关；服务端没有代理，统计全部来自会话日志
         "get_global_proxy_config" => to_value(ctx.db.get_global_proxy_config().await?),
+
+        // ── 会话浏览（只读）────────────────────────────────────────
+        cmd if super::sessions::handles(cmd) => super::sessions::dispatch(ctx, cmd, args).await,
 
         _ => Err(InvokeError::UnknownCommand(cmd.to_owned())),
     }

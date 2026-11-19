@@ -12,6 +12,7 @@ import {
 import { HoverTip } from "@/components/ui/hover-tip";
 import { AppGlyph } from "@/components/shell/AppGlyph";
 import { cn } from "@/lib/utils";
+import { IS_WEB_BUILD } from "@/lib/webBuild";
 import type { SessionContentHit, SessionMeta } from "@/types";
 import {
   canDeleteSession,
@@ -190,16 +191,18 @@ export function SessionItem({
             onClick={onOpen}
             className="absolute inset-0 cursor-pointer rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           />
-          <Checkbox
-            tabIndex={-1}
-            checked={false}
-            aria-label={t("sessionManager.selectSessionLabel", {
-              defaultValue: "选择 {{title}}",
-              title,
-            })}
-            onCheckedChange={onStartSelect}
-            className="relative z-[1] opacity-0 transition-opacity group-hover:opacity-100"
-          />
+          {!IS_WEB_BUILD && (
+            <Checkbox
+              tabIndex={-1}
+              checked={false}
+              aria-label={t("sessionManager.selectSessionLabel", {
+                defaultValue: "选择 {{title}}",
+                title,
+              })}
+              onCheckedChange={onStartSelect}
+              className="relative z-[1] opacity-0 transition-opacity group-hover:opacity-100"
+            />
+          )}
         </>
       )}
 
@@ -385,23 +388,27 @@ export function SessionItem({
                     defaultValue: "复制源文件路径",
                   })}
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className={cn(
-                    sessionMenuItemClass,
-                    deletable ? "text-danger-text" : "text-fg-3",
-                  )}
-                  disabled={!deletable}
-                  onSelect={onDelete}
-                >
-                  {t("sessionManager.deleteEllipsis", {
-                    defaultValue: "删除…",
-                  })}
-                </DropdownMenuItem>
-                {deleteReason && (
-                  <p className="px-2.5 pb-1.5 text-caption text-fg-2">
-                    {deleteReason}
-                  </p>
+                {!IS_WEB_BUILD && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className={cn(
+                        sessionMenuItemClass,
+                        deletable ? "text-danger-text" : "text-fg-3",
+                      )}
+                      disabled={!deletable}
+                      onSelect={onDelete}
+                    >
+                      {t("sessionManager.deleteEllipsis", {
+                        defaultValue: "删除…",
+                      })}
+                    </DropdownMenuItem>
+                    {deleteReason && (
+                      <p className="px-2.5 pb-1.5 text-caption text-fg-2">
+                        {deleteReason}
+                      </p>
+                    )}
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>

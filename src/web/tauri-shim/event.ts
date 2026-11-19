@@ -1,6 +1,7 @@
 /**
  * Web 版 `@tauri-apps/api/event`：用一条共享的 SSE 连接（`api/events`）接收后端事件。
- * 目前后端只推 `usage-log-recorded`，其他事件名订阅后不会收到消息。
+ * 目前后端推 `usage-log-recorded`（用量有更新）和 `session-index-status`（正文索引进度），
+ * 其他事件名订阅后不会收到消息。
  */
 
 export type UnlistenFn = () => void;

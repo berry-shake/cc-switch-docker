@@ -51,6 +51,7 @@ import { AppPageHeader } from "@/components/shell/AppPageHeader";
 import { AppGlyph, APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isMac } from "@/lib/platform";
+import { IS_WEB_BUILD } from "@/lib/webBuild";
 import { SearchField } from "@/components/ui/search-field";
 import { cn } from "@/lib/utils";
 import {
@@ -419,7 +420,8 @@ export function SessionManagerPage({
   }, [sessions]);
 
   const terminalName = useMemo(() => {
-    if (!isMac()) return null;
+    // Web 面板看的是服务器上的会话，不能在浏览器这台机器的终端里恢复
+    if (IS_WEB_BUILD || !isMac()) return null;
     const value = settings?.preferredTerminal || "terminal";
     const key = `settings.terminal.options.macos.${value}`;
     const label = t(key);
@@ -1131,17 +1133,20 @@ export function SessionManagerPage({
                     defaultValue: "刷新列表",
                   })}
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className={sessionMenuItemClass}
-                  onSelect={() => {
-                    enterSelection();
-                    focusSoon(["session-search"]);
-                  }}
-                >
-                  {t("sessionManager.selectMany", {
-                    defaultValue: "选择多个…",
-                  })}
-                </DropdownMenuItem>
+                {/* 多选只用来批量删除，只读的 Web 面板不提供 */}
+                {!IS_WEB_BUILD && (
+                  <DropdownMenuItem
+                    className={sessionMenuItemClass}
+                    onSelect={() => {
+                      enterSelection();
+                      focusSoon(["session-search"]);
+                    }}
+                  >
+                    {t("sessionManager.selectMany", {
+                      defaultValue: "选择多个…",
+                    })}
+                  </DropdownMenuItem>
+                )}
                 {onOpenTerminalSettings && (
                   <DropdownMenuItem
                     className={sessionMenuItemClass}

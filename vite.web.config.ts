@@ -24,6 +24,8 @@ export default defineConfig({
   base: "./",
   define: {
     __CC_SWITCH_VERSION__: JSON.stringify(pkg.version),
+    // src/lib/webBuild.ts 的 IS_WEB_BUILD
+    "import.meta.env.VITE_CC_SWITCH_WEB": JSON.stringify("1"),
   },
   build: {
     outDir: "../dist-web",
@@ -61,6 +63,11 @@ export default defineConfig({
       {
         find: "@tauri-apps/plugin-updater",
         replacement: shim("plugin-updater"),
+      },
+      // 桌面版 useSettings 保存时联动托盘、开机启动等本机副作用，Web 版换成只写允许项的实现
+      {
+        find: /^@\/hooks\/useSettings$/,
+        replacement: path.resolve(__dirname, "src/web/useWebSettings.ts"),
       },
       { find: "@", replacement: path.resolve(__dirname, "./src") },
     ],

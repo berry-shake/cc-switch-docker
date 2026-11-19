@@ -12,6 +12,7 @@ export type WebSettingsPatch = Partial<
     | "usageDashboardRefreshIntervalMs"
     | "sessionAutoSyncEnabled"
     | "visibleApps"
+    | "sessionContentSearchEnabled"
   >
 >;
 

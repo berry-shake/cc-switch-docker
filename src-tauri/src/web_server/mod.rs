@@ -11,7 +11,7 @@
 //! POST /api/login           登录，下发会话 Cookie（不需要认证）
 //! POST /api/logout          清除会话 Cookie
 //! POST /api/invoke/:cmd     与 Tauri invoke 同名同参的命令调用
-//! GET  /api/events          SSE，推送 usage-log-recorded
+//! GET  /api/events          SSE，推送 usage-log-recorded / session-index-status
 //! GET  /*                   Web 面板静态文件
 //! ```
 
@@ -19,6 +19,7 @@ mod api;
 mod assets;
 mod auth;
 mod logger;
+mod sessions;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -27,6 +28,7 @@ use std::time::Duration;
 
 use axum::routing::{get, post};
 use axum::Router;
+use serde_json::Value;
 use tokio::sync::{broadcast, watch};
 
 use crate::database::Database;
@@ -34,6 +36,13 @@ use crate::services::session_usage::{self, SessionSyncResult};
 
 /// 前端监听的用量刷新事件名，与桌面版 `usage_events::EVENT_USAGE_LOG_RECORDED` 一致。
 pub(crate) const EVENT_USAGE_LOG_RECORDED: &str = "usage-log-recorded";
+
+/// 经 SSE 推给前端的事件，对应桌面版的 `app.emit(name, payload)`。
+#[derive(Clone, Debug)]
+pub(crate) struct ServerEvent {
+    pub name: &'static str,
+    pub payload: Value,
+}
 
 const DEFAULT_LISTEN: &str = "127.0.0.1:8765";
 const DEFAULT_SYNC_INTERVAL_SECS: u64 = 10 * 60;
@@ -122,7 +131,7 @@ fn env_nonempty(key: &str) -> Option<String> {
 /// 各请求共享的服务状态。
 pub(crate) struct ServerContext {
     pub db: Arc<Database>,
-    pub events: broadcast::Sender<&'static str>,
+    pub events: broadcast::Sender<ServerEvent>,
     /// 进程准备退出时变为 true；SSE 等长连接据此主动结束，优雅关闭才不会被它们卡住。
     pub shutdown: watch::Receiver<bool>,
 }
@@ -130,7 +139,10 @@ pub(crate) struct ServerContext {
 impl ServerContext {
     fn notify_usage_changed(&self) {
         // 没有订阅者时 send 返回 Err，属正常情况
-        let _ = self.events.send(EVENT_USAGE_LOG_RECORDED);
+        let _ = self.events.send(ServerEvent {
+            name: EVENT_USAGE_LOG_RECORDED,
+            payload: Value::Null,
+        });
     }
 
     /// 扫描一轮会话日志。与桌面版共用同一把同步锁，避免手动同步与后台扫描并发。
@@ -300,7 +312,7 @@ async fn serve(config: ServerConfig) -> Result<(), String> {
         log::info!("Claude 会话目录: {}", root.projects_dir.display());
     }
 
-    let (events, _) = broadcast::channel(16);
+    let (events, _) = broadcast::channel(64);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let ctx = Arc::new(ServerContext {
         db,
