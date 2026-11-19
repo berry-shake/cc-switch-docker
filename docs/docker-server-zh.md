@@ -107,6 +107,16 @@ curl -u admin:密码 -X POST http://localhost:8765/api/invoke/get_usage_summary 
 - Web 面板入口 `src/web.html` → `src/web/main.tsx`，复用桌面版的 `UsageDashboard` 组件；`vite.web.config.ts` 把 `@tauri-apps/*` 换成 `src/web/tauri-shim/`（invoke → HTTP，事件 → SSE）。
 - 二进制和桌面版共用一个 crate，所以仍动态链接 GTK / WebKit 运行库（镜像里已安装，不会创建窗口），镜像因此偏大。
 
+## 合并上游
+
+`server` 分支基于 CC Switch 的 fork（`mod` 分支），删掉了上游桌面版的 GitHub Actions，只保留 `.github/workflows/docker.yml`。
+合并上游时如果遇到这些 workflow 的「修改 / 删除」冲突，保持删除即可：
+
+```bash
+git merge <upstream-tag>
+git status --short | awk '/^(UD|DU) .github\//{print $2}' | xargs -r git rm -q
+```
+
 ## 已知限制
 
 - 统计不区分来源机器 / 用户。
