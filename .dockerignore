@@ -11,4 +11,7 @@ assets
 *.md
 !src/**/*.md
 .env
+.env.example
+.github
+docker-compose.yml
 .DS_Store

@@ -11,8 +11,19 @@ on:
   push:
     branches: [server]
     tags: ["server-v*"]
+    # 只改文档 / compose 示例时不重建镜像
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "docker-compose.yml"
+      - ".env.example"
   pull_request:
     branches: [server]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "docker-compose.yml"
+      - ".env.example"
   workflow_dispatch:
 
 concurrency:
