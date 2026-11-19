@@ -17,8 +17,16 @@ const handlers = new Map<string, Set<Handler>>();
 let source: EventSource | null = null;
 let nextId = 1;
 
+/** 退出登录 / 会话失效时关闭事件流；重新登录后下一次 listen 会重新建立 */
+export function closeEventSource() {
+  source?.close();
+  source = null;
+}
+
 function ensureSource() {
-  if (source || typeof EventSource === "undefined") return;
+  if (typeof EventSource === "undefined") return;
+  // 未登录时连接会被 401 拒绝并进入 CLOSED，不会自动重连：下次订阅时重建
+  if (source && source.readyState !== EventSource.CLOSED) return;
   source = new EventSource("api/events", { withCredentials: true });
   source.onmessage = (message) => {
     let parsed: { event?: string; payload?: unknown };

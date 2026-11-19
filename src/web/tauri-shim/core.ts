@@ -5,6 +5,8 @@
  * 请求走相对路径 `api/invoke/<cmd>`，部署在反向代理的子路径下也能用。
  */
 
+import { notifyUnauthorized } from "../auth";
+
 export class WebInvokeError extends Error {}
 
 export async function invoke<T>(
@@ -25,6 +27,10 @@ export async function invoke<T>(
     } catch {
       data = text;
     }
+  }
+  if (response.status === 401) {
+    // 会话过期或改了密码：通知根组件回到登录页
+    notifyUnauthorized();
   }
   if (!response.ok) {
     // Tauri 的 invoke 失败时 reject 的是命令返回的错误值（通常是字符串），这里保持一致

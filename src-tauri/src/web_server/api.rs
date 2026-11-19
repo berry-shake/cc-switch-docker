@@ -427,7 +427,7 @@ async fn dispatch(ctx: &ServerContext, cmd: &str, args: Value) -> InvokeResult {
                 .map_err(InvokeError::Failed)?,
         ),
 
-        // ── 设置（只读全部；只允许写用量页自己的几项）────────────────
+        // ── 设置（只读全部；只允许写用量页和应用页自己的几项）────────────────
         "get_settings" => to_value(crate::settings::get_settings_for_frontend()),
         "save_settings" => {
             let a: SaveSettingsArgs = parse(args)?;
@@ -436,6 +436,8 @@ async fn dispatch(ctx: &ServerContext, cmd: &str, args: Value) -> InvokeResult {
             next.usage_dashboard_refresh_interval_ms =
                 a.settings.usage_dashboard_refresh_interval_ms;
             next.session_auto_sync_enabled = a.settings.session_auto_sync_enabled;
+            // 「应用」页：用量页筛选栏显示哪些 CLI
+            next.visible_apps = a.settings.visible_apps;
             crate::settings::update_settings(next)?;
             Ok(Value::Bool(true))
         }

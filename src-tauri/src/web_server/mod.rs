@@ -7,6 +7,9 @@
 //!
 //! ```text
 //! GET  /api/health          健康检查（不需要认证）
+//! GET  /api/session         会话状态（不需要认证）
+//! POST /api/login           登录，下发会话 Cookie（不需要认证）
+//! POST /api/logout          清除会话 Cookie
 //! POST /api/invoke/:cmd     与 Tauri invoke 同名同参的命令调用
 //! GET  /api/events          SSE，推送 usage-log-recorded
 //! GET  /*                   Web 面板静态文件
@@ -47,8 +50,8 @@ cc-switch-server — 无界面的 AI CLI 用量统计服务（CC Switch Web 版�
 
 环境变量:
   CC_SWITCH_WEB_LISTEN          监听地址，默认 127.0.0.1:8765（Docker 镜像里是 0.0.0.0:8765）
-  CC_SWITCH_WEB_USERNAME        HTTP Basic 认证用户名，默认 admin
-  CC_SWITCH_WEB_PASSWORD        HTTP Basic 认证密码；不设置则不启用认证
+  CC_SWITCH_WEB_USERNAME        登录用户名，默认 admin
+  CC_SWITCH_WEB_PASSWORD        登录密码；不设置则不启用登录
   CC_SWITCH_WEB_INSECURE        设为 1 时允许在非回环地址上不设密码运行
   CC_SWITCH_WEB_DIST            Web 面板静态文件目录，默认可执行文件旁的 web/，其次 ./dist-web
   CC_SWITCH_SYNC_INTERVAL_SECS  后台扫描会话日志的间隔秒数，默认 600；0 表示只在启动时扫描
@@ -307,26 +310,37 @@ async fn serve(config: ServerConfig) -> Result<(), String> {
 
     spawn_background_tasks(ctx.clone(), config.sync_interval);
 
+    let auth_state = Arc::new(auth::AuthState::new(
+        config.credentials.clone(),
+        &crate::config::get_app_config_dir(),
+    ));
+
     let api_routes = Router::new()
         .route("/invoke/:cmd", post(api::invoke))
         .route("/events", get(api::events))
         .with_state(ctx.clone());
+    let auth_routes = Router::new()
+        .route("/session", get(auth::session))
+        .route("/login", post(auth::login))
+        .route("/logout", post(auth::logout))
+        .with_state(auth_state.clone());
 
-    let mut app = Router::new().nest("/api", api_routes).fallback(
-        get(assets::serve).with_state(Arc::new(assets::StaticAssets::new(config.dist_dir.clone()))),
-    );
-
-    if let Some(credentials) = config.credentials.clone() {
-        app = app.layer(axum::middleware::from_fn_with_state(
-            Arc::new(credentials),
-            auth::require_basic_auth,
-        ));
-        log::info!("已启用 HTTP Basic 认证");
-    }
-    // 健康检查放在认证层之外，给容器探针用
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/api/health", get(api::health))
-        .merge(app);
+        .nest("/api", api_routes.merge(auth_routes))
+        .fallback(
+            get(assets::serve)
+                .with_state(Arc::new(assets::StaticAssets::new(config.dist_dir.clone()))),
+        );
+
+    if auth_state.enabled() {
+        // 只拦 /api/*（健康检查、登录相关除外）；页面本身不含数据，由前端显示登录页
+        app = app.layer(axum::middleware::from_fn_with_state(
+            auth_state,
+            auth::require_auth,
+        ));
+        log::info!("已启用登录认证");
+    }
 
     match &config.dist_dir {
         Some(dir) => log::info!("Web 面板目录: {}", dir.display()),
@@ -338,7 +352,11 @@ async fn serve(config: ServerConfig) -> Result<(), String> {
         .map_err(|e| format!("监听 {} 失败: {e}", config.listen))?;
     log::info!("Web 面板: http://{}", config.listen);
 
-    let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+    let server = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move {
         shutdown_signal().await;
         let _ = shutdown_tx.send(true);
     });

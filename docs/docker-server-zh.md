@@ -14,7 +14,20 @@ cp .env.example .env        # 修改 CC_SWITCH_WEB_PASSWORD
 docker compose up -d
 ```
 
-浏览器打开 `http://<服务器IP>:8765`，用 `.env` 里的用户名 / 密码登录（HTTP Basic 认证）。
+浏览器打开 `http://<服务器IP>:8765`，在登录页输入 `.env` 里的用户名 / 密码。
+
+面板有两页（顶栏切换）：
+
+- **用量统计**：同桌面版。
+- **应用**：每个 CLI 的累计请求数 / Token，以及「显示」开关，决定用量页筛选栏里出现哪些 CLI（只影响显示，隐藏的 CLI 照常采集、照常计入「全部」）。「只显示有记录的」一键隐藏没数据的 CLI。
+
+### 登录
+
+- 登录后下发 HttpOnly 会话 Cookie；勾选「保持登录 30 天」为持久 Cookie，否则关闭浏览器即失效（服务端最多认 12 小时）。
+- 会话签名密钥保存在数据目录的 `web-session.key`（0600），重启服务不用重新登录；**改密码后所有已登录会话立即失效**。删掉该文件也会让所有会话失效。
+- 同一 IP 15 分钟内失败 10 次后暂时拒绝登录（HTTP 429）。
+- 经 HTTPS 反向代理访问时，代理需传 `X-Forwarded-Proto: https`，Cookie 才会带 `Secure`。
+- 脚本仍可直接用 HTTP Basic 访问 `/api/*`（`curl -u 用户名:密码`），见下文 HTTP API。
 
 默认挂载宿主机的 `~/.claude` 和 `~/.codex`（只读）。用到其他 CLI 时，在 `docker-compose.yml` 里取消对应行的注释；只保留宿主机上确实存在的目录，不存在的路径会被 Docker 自动建成空目录（属主 root）。
 
@@ -40,8 +53,8 @@ GitHub Actions 会构建 `linux/amd64`、`linux/arm64` 两种架构并推送到 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `CC_SWITCH_WEB_LISTEN` | 镜像内 `0.0.0.0:8765`；裸跑 `127.0.0.1:8765` | 监听地址 |
-| `CC_SWITCH_WEB_USERNAME` | `admin` | Basic 认证用户名 |
-| `CC_SWITCH_WEB_PASSWORD` | 无 | Basic 认证密码。监听非回环地址时**必须**设置 |
+| `CC_SWITCH_WEB_USERNAME` | `admin` | 登录用户名 |
+| `CC_SWITCH_WEB_PASSWORD` | 无 | 登录密码。监听非回环地址时**必须**设置 |
 | `CC_SWITCH_WEB_INSECURE` | 无 | 设为 `1` 时允许在非回环地址上不设密码（前面已有带认证的反向代理时用） |
 | `CC_SWITCH_SYNC_INTERVAL_SECS` | `600` | 后台扫描间隔（秒），`0` 只在启动时扫描。面板打开时还会按页面上选的间隔加扫 |
 | `CC_SWITCH_CLAUDE_EXTRA_DIRS` | 无 | 额外的 Claude 配置目录（目录下有 `projects/`），`:` 分隔 |
@@ -88,10 +101,13 @@ Linux 上编译需要和桌面版一样的 GTK / WebKit 开发包（同一个 cr
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | `GET` | `/api/health` | 健康检查，不需要认证 |
+| `GET` | `/api/session` | 当前会话状态（`authRequired` / `authenticated` / `username` / `version`），不需要认证 |
+| `POST` | `/api/login` | `{"username","password","remember"}`，成功后下发会话 Cookie |
+| `POST` | `/api/logout` | 清除会话 Cookie |
 | `POST` | `/api/invoke/<command>` | 与桌面版 Tauri 命令同名同参（JSON，参数名 camelCase） |
 | `GET` | `/api/events` | SSE，有新用量导入时推送 `{"event":"usage-log-recorded"}` |
 
-例如：
+`/api/health`、`/api/session`、`/api/login`、`/api/logout` 之外的接口需要会话 Cookie 或 HTTP Basic 认证。例如：
 
 ```bash
 curl -u admin:密码 -X POST http://localhost:8765/api/invoke/get_usage_summary \
@@ -99,12 +115,12 @@ curl -u admin:密码 -X POST http://localhost:8765/api/invoke/get_usage_summary 
   -d '{"startDate": 1767196800, "endDate": 1769875200}'
 ```
 
-开放的命令：`get_usage_summary`、`get_usage_summary_by_app`、`get_usage_trends`、`get_usage_first_date`、`get_provider_stats`、`get_model_stats`、`get_request_logs`、`get_request_detail`、`get_session_usage_summary`、`sync_session_usage`、`get_session_usage_last_sync`、`rebuild_codex_usage`、`get_model_pricing`、`update_model_pricing`、`update_model_pricing_batch`、`delete_model_pricing`、`get_models_dev_sync_config`、`save_models_dev_sync_config`、`record_models_dev_sync_result`、`fetch_models_dev`、`get_pricing_model_source`、`set_pricing_model_source`、`fetch_exchange_rates`、`get_codex_quota_snapshot`、`get_codex_official_usage_snapshot`、`get_settings`、`save_settings`（只写入用量页相关的几项）、`get_global_proxy_config`。
+开放的命令：`get_usage_summary`、`get_usage_summary_by_app`、`get_usage_trends`、`get_usage_first_date`、`get_provider_stats`、`get_model_stats`、`get_request_logs`、`get_request_detail`、`get_session_usage_summary`、`sync_session_usage`、`get_session_usage_last_sync`、`rebuild_codex_usage`、`get_model_pricing`、`update_model_pricing`、`update_model_pricing_batch`、`delete_model_pricing`、`get_models_dev_sync_config`、`save_models_dev_sync_config`、`record_models_dev_sync_result`、`fetch_models_dev`、`get_pricing_model_source`、`set_pricing_model_source`、`fetch_exchange_rates`、`get_codex_quota_snapshot`、`get_codex_official_usage_snapshot`、`get_settings`、`save_settings`（只写入用量页的几项设置和 `visibleApps`）、`get_global_proxy_config`。
 
 ## 实现说明
 
 - 服务端代码在 `src-tauri/src/web_server/`，由 Cargo feature `web-server` 控制，桌面版构建不包含它。
-- Web 面板入口 `src/web.html` → `src/web/main.tsx`，复用桌面版的 `UsageDashboard` 组件；`vite.web.config.ts` 把 `@tauri-apps/*` 换成 `src/web/tauri-shim/`（invoke → HTTP，事件 → SSE）。
+- Web 面板入口 `src/web.html` → `src/web/main.tsx` → `WebRoot`（登录页 / 顶栏 / 页面切换），用量页复用桌面版的 `UsageDashboard` 组件；`vite.web.config.ts` 把 `@tauri-apps/*` 换成 `src/web/tauri-shim/`（invoke → HTTP，事件 → SSE）。
 - 二进制和桌面版共用一个 crate，所以仍动态链接 GTK / WebKit 运行库（镜像里已安装，不会创建窗口），镜像因此偏大。
 
 ## 合并上游
