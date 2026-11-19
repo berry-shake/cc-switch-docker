@@ -5,8 +5,7 @@
 #   打开 http://<服务器IP>:8765
 #
 # 会话目录只读挂载到容器的 /root 下，路径与 CLI 的默认位置一致，服务端只读不写。
-# 宿主机上没有的目录请删掉对应那行（create_host_path: false 时缺失目录会导致启动失败，
-# 避免 Docker 以 root 身份在宿主机上自动建出空目录）。
+# 只保留宿主机上确实存在的目录：不存在的路径会被 Docker 自动建成空目录（属主 root）。
 
 services:
   cc-switch-server:
@@ -27,32 +26,17 @@ services:
     volumes:
       # 统计数据库、设置、自动备份
       - cc-switch-data:/root/.cc-switch
-
       # Claude Code
-      - type: bind
-        source: ${HOME}/.claude
-        target: /root/.claude
-        read_only: true
-        bind: { create_host_path: false }
-
+      - ${HOME}/.claude:/root/.claude:ro
       # Codex（~/.codex/auth.json 存在时，用量页还能显示 Codex 官方额度）
-      - type: bind
-        source: ${HOME}/.codex
-        target: /root/.codex
-        read_only: true
-        bind: { create_host_path: false }
-
+      - ${HOME}/.codex:/root/.codex:ro
       # 按需取消注释：
-      # Gemini CLI
-      # - { type: bind, source: "${HOME}/.gemini", target: /root/.gemini, read_only: true, bind: { create_host_path: false } }
-      # OpenCode（SQLite 是 WAL 模式，只读挂载可能打不开，必要时去掉 read_only）
-      # - { type: bind, source: "${HOME}/.local/share/opencode", target: /root/.local/share/opencode, read_only: true, bind: { create_host_path: false } }
-      # Grok Build
-      # - { type: bind, source: "${HOME}/.grok", target: /root/.grok, read_only: true, bind: { create_host_path: false } }
-      # Kimi Code
-      # - { type: bind, source: "${HOME}/.kimi", target: /root/.kimi, read_only: true, bind: { create_host_path: false } }
-      # 其他用户的 Claude 配置（配合 CC_SWITCH_CLAUDE_EXTRA_DIRS）
-      # - { type: bind, source: /home/alice/.claude, target: /sources/alice/.claude, read_only: true, bind: { create_host_path: false } }
+      # - ${HOME}/.gemini:/root/.gemini:ro                                 # Gemini CLI
+      # - ${HOME}/.local/share/opencode:/root/.local/share/opencode:ro     # OpenCode（WAL 模式的 SQLite 只读可能打不开，必要时去掉 :ro）
+      # - ${HOME}/.grok:/root/.grok:ro                                     # Grok Build
+      # - ${HOME}/.omp:/root/.omp:ro                                       # Oh My Pi
+      # - ${HOME}/.kimi:/root/.kimi:ro                                     # Kimi Code
+      # - /home/alice/.claude:/sources/alice/.claude:ro                    # 其他用户的 Claude（配合 CC_SWITCH_CLAUDE_EXTRA_DIRS）
 
 volumes:
   cc-switch-data:

@@ -16,7 +16,7 @@ docker compose up -d
 
 浏览器打开 `http://<服务器IP>:8765`，用 `.env` 里的用户名 / 密码登录（HTTP Basic 认证）。
 
-默认挂载宿主机的 `~/.claude` 和 `~/.codex`（只读）。用到其他 CLI 时，在 `docker-compose.yml` 里取消对应行的注释；宿主机上没有的目录要删掉对应行，否则容器起不来（特意关闭了自动建目录，避免 Docker 以 root 在宿主机上建出空目录）。
+默认挂载宿主机的 `~/.claude` 和 `~/.codex`（只读）。用到其他 CLI 时，在 `docker-compose.yml` 里取消对应行的注释；只保留宿主机上确实存在的目录，不存在的路径会被 Docker 自动建成空目录（属主 root）。
 
 查看日志：`docker compose logs -f`。首次启动会全量导入历史会话，日志里能看到 `Session usage sync imported N record(s)`。
 
@@ -59,8 +59,8 @@ GitHub Actions 会构建 `linux/amd64`、`linux/arm64` 两种架构并推送到 
     environment:
       CC_SWITCH_CLAUDE_EXTRA_DIRS: /sources/alice/.claude:/sources/bob/.claude
     volumes:
-      - { type: bind, source: /home/alice/.claude, target: /sources/alice/.claude, read_only: true }
-      - { type: bind, source: /home/bob/.claude,   target: /sources/bob/.claude,   read_only: true }
+      - /home/alice/.claude:/sources/alice/.claude:ro
+      - /home/bob/.claude:/sources/bob/.claude:ro
 ```
 
 目前统计不区分用户 / 机器，所有目录的用量合在一起显示。
