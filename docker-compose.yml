@@ -1,0 +1,58 @@
+# cc-switch-server：服务器 / WSL 上的 AI CLI 用量统计
+#
+#   cp .env.example .env    # 修改密码
+#   docker compose up -d
+#   打开 http://<服务器IP>:8765
+#
+# 会话目录只读挂载到容器的 /root 下，路径与 CLI 的默认位置一致，服务端只读不写。
+# 宿主机上没有的目录请删掉对应那行（create_host_path: false 时缺失目录会导致启动失败，
+# 避免 Docker 以 root 身份在宿主机上自动建出空目录）。
+
+services:
+  cc-switch-server:
+    image: ${CC_SWITCH_IMAGE:-ghcr.io/berry-shake/cc-switch-docker:latest}
+    build:
+      context: .
+    container_name: cc-switch-server
+    restart: unless-stopped
+    ports:
+      - "${CC_SWITCH_PORT:-8765}:8765"
+    environment:
+      CC_SWITCH_WEB_USERNAME: ${CC_SWITCH_WEB_USERNAME:-admin}
+      CC_SWITCH_WEB_PASSWORD: ${CC_SWITCH_WEB_PASSWORD:?请在 .env 中设置 CC_SWITCH_WEB_PASSWORD}
+      CC_SWITCH_SYNC_INTERVAL_SECS: ${CC_SWITCH_SYNC_INTERVAL_SECS:-600}
+      TZ: ${TZ:-Asia/Shanghai}
+      # 多个用户 / 多份 Claude 配置：挂到 /sources 下后在这里列出（: 分隔）
+      # CC_SWITCH_CLAUDE_EXTRA_DIRS: /sources/alice/.claude:/sources/bob/.claude
+    volumes:
+      # 统计数据库、设置、自动备份
+      - cc-switch-data:/root/.cc-switch
+
+      # Claude Code
+      - type: bind
+        source: ${HOME}/.claude
+        target: /root/.claude
+        read_only: true
+        bind: { create_host_path: false }
+
+      # Codex（~/.codex/auth.json 存在时，用量页还能显示 Codex 官方额度）
+      - type: bind
+        source: ${HOME}/.codex
+        target: /root/.codex
+        read_only: true
+        bind: { create_host_path: false }
+
+      # 按需取消注释：
+      # Gemini CLI
+      # - { type: bind, source: "${HOME}/.gemini", target: /root/.gemini, read_only: true, bind: { create_host_path: false } }
+      # OpenCode（SQLite 是 WAL 模式，只读挂载可能打不开，必要时去掉 read_only）
+      # - { type: bind, source: "${HOME}/.local/share/opencode", target: /root/.local/share/opencode, read_only: true, bind: { create_host_path: false } }
+      # Grok Build
+      # - { type: bind, source: "${HOME}/.grok", target: /root/.grok, read_only: true, bind: { create_host_path: false } }
+      # Kimi Code
+      # - { type: bind, source: "${HOME}/.kimi", target: /root/.kimi, read_only: true, bind: { create_host_path: false } }
+      # 其他用户的 Claude 配置（配合 CC_SWITCH_CLAUDE_EXTRA_DIRS）
+      # - { type: bind, source: /home/alice/.claude, target: /sources/alice/.claude, read_only: true, bind: { create_host_path: false } }
+
+volumes:
+  cc-switch-data:

@@ -1,3 +1,8 @@
+> [!NOTE]
+> **cc-switch-docker**：本仓库在 CC Switch 基础上增加了无界面的用量统计服务 `cc-switch-server`（Docker / 服务器 / WSL），用 Web 面板查看各 AI CLI 的用量。部署见 [docs/docker-server-zh.md](docs/docker-server-zh.md)，镜像 `ghcr.io/berry-shake/cc-switch-docker`。
+>
+> This fork adds `cc-switch-server`, a headless usage-statistics service with a web dashboard for servers, Docker and WSL. See [docs/docker-server-zh.md](docs/docker-server-zh.md).
+
 <div align="center">
 
 # CC Switch
