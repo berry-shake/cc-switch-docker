@@ -9,7 +9,11 @@ import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 export function WebSessionsPage() {
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden bg-app text-fg-1 selection:bg-action/25">
-      <main className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden bg-app">
+      {/* id="content-area" 的用意见 WebUsageApp */}
+      <main
+        id="content-area"
+        className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden bg-app"
+      >
         <SessionManagerPage appId="claude" />
       </main>
     </div>
